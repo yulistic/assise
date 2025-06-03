@@ -172,6 +172,9 @@ namespace AIO {
       std::cout << "read n " << read_n_ << " total " << read_total_ << ":" << (double) read_tsc_ / read_total_ << " tsc " << read_tsc_ << ":" << (double) read_tsc_ / read_n_ << std::endl;
 #endif
       io_destroy(this->ctx_);
+      if (this->fd_ >= 0) {
+        close(this->fd_);
+      }
     }
 
 

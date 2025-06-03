@@ -630,12 +630,11 @@ hook(long syscall_number,
   return 1;
 }
 
-static __attribute__((constructor)) void init(void)
+static __attribute__((constructor)) void libfs_init(void)
 {
-   const char *disable_init;
+  const char *disable_init;
 
-   disable_init = getenv("MLFS_DISABLE_INIT");
-
+  disable_init = getenv("MLFS_DISABLE_INIT");
 
 #if 1
 
@@ -658,9 +657,7 @@ static __attribute__((constructor)) void init(void)
   // Set up the callback function
   intercept_hook_point = hook;
 #endif
-
 }
-
 
 #ifdef __cplusplus
 // }
