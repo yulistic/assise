@@ -416,6 +416,7 @@ void io_bench::do_write(void)
     }
 
 	if (do_fsync) {
+		printf("do_sync\n");
 		fsync(fd);
 	}
 

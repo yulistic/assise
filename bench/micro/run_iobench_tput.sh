@@ -1,25 +1,29 @@
+#!/bin/bash
+set -ex
 # Used for running throughput experiments
 
 [ -f output.log ] && rm output.log
 [ -f temp.log ] && rm temp.log
 
 PROCS=$4
+DO_SYNC=""
 
 if [ "$#" -ne 4 ]; then
-    ./iobench -h
+    sudo ./iobench -h
 	exit
 fi
 
 if [ "$1" = "sw" ] || [ "$1" = "rw" ]; then
     sudo ./run.sh create_files $PROCS
     sleep 1
+    DO_SYNC="-s"
 fi
 
 for run in $(seq 1 $PROCS)
 do
         #FILE_ID=$run numactl -N0 -m0 ./run.sh iobench rr 128M 64K 1 >> output.log &
         #FILE_ID=$run numactl -N0 -m0 ./run.sh iobench sr 512M 64K 1 &
-        sudo FILE_ID=$run MLFS_DIGEST_TH=30 numactl -N0 -m0 ./run.sh iobench $1 $2 $3 1 -p >> output.log &
+        sudo FILE_ID=$run MLFS_DIGEST_TH=30 numactl -N0 -m0 ./run.sh iobench $1 $2 $3 1 -p $DO_SYNC >> output.log &
         #echo 'df'
 done
 
