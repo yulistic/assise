@@ -2220,7 +2220,7 @@ void signal_callback(struct app_context *msg)
 		//uint32_t n_digest;
 		//addr_t start_blk, log_end;
 		
-		printf("peer recv: %s\n", msg->data);
+		mlfs_rpc("peer recv: %s\n", msg->data);
 
 		struct digest_arg *digest_arg = (struct digest_arg *)mlfs_alloc(sizeof(struct digest_arg));
 		digest_arg->sock_fd = msg->sockfd;
@@ -2255,7 +2255,7 @@ void signal_callback(struct app_context *msg)
 		uint32_t n_digested;
 		addr_t start_digest;
 
-		printf("peer recv: %s\n", msg->data);
+		mlfs_rpc("peer recv: %s\n", msg->data);
 		sscanf(msg->data, "|%s |%d|%d|%d|%lu|%d|%d|", cmd_hdr, &log_id, &dev,
 				&n_digested, &start_digest, &rotated, &lru_updated);
 		update_peer_digest_state(g_sync_ctx[log_id]->peer, start_digest, n_digested, rotated);
