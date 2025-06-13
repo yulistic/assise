@@ -21,6 +21,8 @@ typedef struct isolated_list {
 
 int try_migrate_blocks(uint8_t from_dev, uint8_t to_dev, uint32_t nr_blocks, uint8_t force, int swap);
 int migrate_blocks(uint8_t from_dev, uint8_t to_dev, isolated_list_t *migrate_list, int swap);
+int try_migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, uint32_t nr_blocks, uint8_t force, int swap);
+int migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, isolated_list_t *migrate_list, int swap);
 int try_writeback_blocks(uint8_t from_dev, uint8_t to_dev);
 //int writeback_blocks(uint8_t from_dev, uint8_t to_dev, isolated_list_t *wb_list);
 int update_slru_list(uint8_t dev, lru_node_t node);

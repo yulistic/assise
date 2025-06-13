@@ -1697,7 +1697,7 @@ static void handle_digest_request(void *arg)
 
 
 #ifdef MIGRATION	
-	try_migrate_blocks(g_root_dev, g_ssd_dev, 0, 0, 1);
+	try_migrate_blocks(g_root_dev, g_ssd_dev, log_id, 0, 0, 1);
 #endif
 
 	if (enable_perf_stats)

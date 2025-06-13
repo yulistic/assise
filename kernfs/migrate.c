@@ -182,7 +182,7 @@ int update_slru_list_from_digest(uint8_t dev, lru_key_t k, lru_val_t v)
 #endif
 }
 
-int do_migrate_blocks(uint8_t from_dev, uint8_t to_dev, uint32_t file_inum, 
+int do_migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, uint32_t file_inum, 
 		offset_t offset, uint32_t length, addr_t blknr)
 {
 	int ret;
@@ -238,7 +238,7 @@ int do_migrate_blocks(uint8_t from_dev, uint8_t to_dev, uint32_t file_inum,
 	// with setting m_lblk to the offset having a the hole to fill it.
 	while (nr_digested_blocks < nr_blocks) {
 		int nr_block_get = 0;
-		handle_t handle = {.dev = to_dev};
+		handle_t handle = {.libfs = libfs_id, .dev = to_dev};
 
 		mlfs_assert((cur_offset % g_block_size_bytes) == 0);
 
@@ -401,7 +401,7 @@ again:
 }
 #endif
 
-int migrate_blocks(uint8_t from_dev, uint8_t to_dev, isolated_list_t *migrate_list, int swap)
+int migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, isolated_list_t *migrate_list, int swap)
 {
 	int ret;
 	int migrate_down = from_dev < to_dev;
@@ -416,7 +416,7 @@ int migrate_blocks(uint8_t from_dev, uint8_t to_dev, isolated_list_t *migrate_li
 	uint32_t migrated_success = 0;
 	uint8_t lower_dev, upper_dev;
 	struct list_head migrate_success_list;
-	handle_t handle = {.dev = from_dev};
+	handle_t handle = {.libfs = libfs_id, .dev = from_dev};
 
 	INIT_LIST_HEAD(&migrate_success_list);
 
@@ -528,6 +528,7 @@ again:
 
 		mlfs_assert((end << g_block_size_shift) <= file_inode->size);
 
+		handle.libfs = libfs_id;
 		handle.dev = from_dev;
 		ret = mlfs_ext_truncate(&handle, file_inode, start, end - 1);
 
@@ -553,7 +554,7 @@ again:
 		mlfs_debug("get_blocks(dev = %d): offset %lu(0x%lx) ret %d\n", 
 				g_root_dev, l->offset, l->offset, ret);
 
-		file_inode = icache_find(l->inum);
+		file_inode = icache_find(l->val.inum);
 		mlfs_assert(file_inode);
 
 		ret = mlfs_ext_get_blocks(NULL, file_inode, &map, 0);
@@ -592,7 +593,7 @@ again:
 	lower_dev = get_lower_dev(to_dev);
 
 	if (lower_dev != 0) 
-		try_migrate_blocks(to_dev, lower_dev, 0, 0, 0);
+		try_migrate_blocks(to_dev, lower_dev, libfs_id, 0, 0, 0);
 
 #if MLFS_REPLICA
 	uint64_t used_blocks = sb[to_dev]->used_blocks;
@@ -602,7 +603,7 @@ again:
 	if (migrate_down && swap &&
 			used_blocks > (migrate_threshold[from_dev] * datablocks) / 100) {
 		mlfs_debug("try migrate up - replica [from_dev: %d to_dev: %d]\n", to_dev, from_dev);
-		try_migrate_blocks(to_dev, from_dev, migrated_success, 1, 1);
+		try_migrate_blocks(to_dev, from_dev, libfs_id, migrated_success, 1, 1);
 	}
 
 #endif
@@ -655,7 +656,7 @@ int try_writeback_blocks(uint8_t from_dev, uint8_t to_dev)
 #endif
 
 /* nr_blocks: minimum amount of blocks to migrate */
-int try_migrate_blocks(uint8_t from_dev, uint8_t to_dev, uint32_t nr_blocks, uint8_t force, int swap)
+int try_migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, uint32_t nr_blocks, uint8_t force, int swap)
 {
 #ifdef MIGRATION
 	int migrate_down = from_dev < to_dev;
@@ -741,7 +742,7 @@ do_force_migration:
 			if (i >= n_entries)
 				break;
 		}
-		ret += migrate_blocks(from_dev, to_dev, &migrate_list, swap);
+		ret += migrate_blocks(from_dev, to_dev, libfs_id, &migrate_list, swap);
 	}
 
 	// TODO: figure out why the list fails.

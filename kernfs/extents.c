@@ -155,7 +155,7 @@ retry:
 			panic("Fail to allocate block\n");
 
 #ifdef KERNFS
-		try_migrate_blocks(g_root_dev, g_ssd_dev, 0, 0, 1);
+			try_migrate_blocks(g_root_dev, g_ssd_dev, handle->libfs, 0, 0, 1);
 			if (migrated)
 				*migrated = true;
 #endif
