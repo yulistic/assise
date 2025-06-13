@@ -350,11 +350,21 @@ void * local_server_loop(void *port)
 	struct sockaddr_in serv_addr;
 	struct sockaddr_storage serverStorage;
 	socklen_t addr_size;
+	int opt = 1;
 
 	memset(&serv_addr, '0', sizeof(serv_addr));
 	
 	server_socket = socket(PF_INET, SOCK_STREAM, 0);
-	serv_addr.sin_family = AF_INET;
+
+	// SO_REUSEADDR for quick restart.
+        if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt,
+                       sizeof(opt)) < 0) {
+        	printf("setsockopt failed");
+        	close(server_socket);
+		mp_die("setsockopt failed");
+        }
+
+        serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(atoi(port));
 	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	if(bind(server_socket, (struct sockaddr *) &serv_addr, sizeof(serv_addr)))
