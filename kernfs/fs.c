@@ -308,6 +308,12 @@ loghdr_meta_t *read_log_header(uint8_t from_dev, addr_t hdr_addr)
 	return loghdr_meta;
 }
 
+static void init_extent_tree_root(uint8_t dev, int libfs_id, struct inode *inode)
+{
+	handle_t handle = {.dev = dev, .libfs = libfs_id};
+	mlfs_ext_tree_init(&handle, inode);
+}
+
 // FIXME: to_dev is now used. change APIs
 int digest_inode(uint8_t from_dev, uint8_t to_dev, int libfs_id, 
 		uint32_t inum, addr_t blknr)
@@ -361,7 +367,17 @@ int digest_inode(uint8_t from_dev, uint8_t to_dev, int libfs_id,
 		if (ihdr->eh_magic != MLFS_EXT_MAGIC) {
 			mlfs_ext_tree_init(&handle, inode);
 
-			// For testing purpose, those data are hard-coded.
+			// Initialize ssd & hdd devices' extent tree root.
+			// Only file data blocks are migrated (No directory blocks).
+                        if (inode->itype == T_FILE) {
+                        	for (int i = g_ssd_dev; i <= g_n_devices; i++) {
+                            		if (i == to_dev)
+                                		continue;
+					init_extent_tree_root(i, libfs_id, inode);
+				}
+                        }
+
+                        // For testing purpose, those data are hard-coded.
 			inode->i_writeback = NULL;
 			memset(inode->i_uuid, 0xCC, sizeof(inode->i_uuid));
 			inode->i_csum = mlfs_crc32c(~0, inode->i_uuid, sizeof(inode->i_uuid));
