@@ -385,7 +385,8 @@ static inline int in_range(mlfs_lblk_t b, uint32_t first, uint16_t len) {
 	__mlfs_ext_dirty(__func__, __LINE__, (handle), (inode), (path))
 
 int mlfs_ext_alloc_blocks(handle_t *handle, struct inode *inode,
-		int goal, unsigned int flags, mlfs_fsblk_t *blockp, mlfs_lblk_t *count);
+		int goal, unsigned int flags, mlfs_fsblk_t *blockp, mlfs_lblk_t *count,
+		bool *migrated);
 
 int mlfs_ext_get_blocks(handle_t *handle, struct inode *inode, 
 			struct mlfs_map_blocks *map, int flags);

@@ -118,12 +118,16 @@ static inline int mlfs_handle_dirty_metadata(handle_t *handle,
 }
 
 int mlfs_ext_alloc_blocks(handle_t *handle, struct inode *inode,
-		int goal, unsigned int flags, mlfs_fsblk_t *blockp, mlfs_lblk_t *count)
+		int goal, unsigned int flags, mlfs_fsblk_t *blockp, mlfs_lblk_t *count,
+		bool *migrated)
 {
 	struct super_block *sb = get_inode_sb(handle->dev, inode);
 	int ret;
 	int retry_count = 0;
 	enum alloc_type a_type;
+
+	if (migrated)
+		*migrated = false;
 	
 	if (flags & MLFS_GET_BLOCKS_CREATE_DATA_LOG)
 		a_type = DATA_LOG;
@@ -152,6 +156,8 @@ retry:
 
 #ifdef KERNFS
 		try_migrate_blocks(g_root_dev, g_ssd_dev, 0, 0, 1);
+			if (migrated)
+				*migrated = true;
 #endif
 
 		goto retry;
@@ -212,13 +218,13 @@ static inline mlfs_fsblk_t mlfs_inode_to_goal_block(struct inode *inode)
 /* used for file data blocks in extent tree */
 static mlfs_fsblk_t mlfs_new_data_blocks(handle_t *handle,
 		struct inode *inode, int goal, unsigned int flags,
-		mlfs_lblk_t *count, int *errp) 
+		mlfs_lblk_t *count, int *errp, bool *migrated)
 {
 	struct super_block *sb = get_inode_sb(handle->dev, inode);
 	mlfs_fsblk_t block = 0;
 	mlfs_lblk_t nrblocks = (count) ? (*count) : 1;
 
-	*errp = mlfs_ext_alloc_blocks(handle, inode, goal, flags, &block, count);
+	*errp = mlfs_ext_alloc_blocks(handle, inode, goal, flags, &block, count, migrated);
 	
 	mlfs_debug("[dev %u] used blocks %d\n", g_root_dev,
 			bitmap_weight((uint64_t *)inode->i_sb[handle->dev]->s_blk_bitmap->bitmap,
@@ -237,7 +243,7 @@ static mlfs_fsblk_t mlfs_new_meta_blocks(handle_t *handle,
 
 	flags |= MLFS_GET_BLOCKS_CREATE_META;
 
-	*errp = mlfs_ext_alloc_blocks(handle, inode, goal, flags, &block, count);
+	*errp = mlfs_ext_alloc_blocks(handle, inode, goal, flags, &block, count, NULL);
 
 	mlfs_debug("[dev %u] used blocks %d\n", g_root_dev,
 			bitmap_weight((uint64_t *)inode->i_sb[handle->dev]->s_blk_bitmap->bitmap,
@@ -2786,6 +2792,7 @@ int mlfs_ext_get_blocks(handle_t *handle, struct inode *inode,
 	mlfs_fsblk_t next, newblock;
 	int create;
 	uint64_t tsc_start = 0;
+	bool migration_triggered = false;
 
 	mlfs_assert(handle !=  NULL);
 
@@ -2959,10 +2966,34 @@ find_ext_path:
 	//goal = mlfs_ext_find_goal(inode, path, map->m_lblk);
 	
 	newblock = mlfs_new_data_blocks(handle, inode, 
-			goal, flags, &allocated, &err);
+			goal, flags, &allocated, &err, &migration_triggered);
 
-	if (!newblock) 
+	if (!newblock) {
+		mlfs_printf("mlfs_ext_get_blocks: mlfs_new_data_blocks failed for inum %u, lblk %lu, err %d\n",
+			    inode->inum, map->m_lblk, err);
 		goto out2;
+	}
+
+	if (migration_triggered) {
+		/*
+		 * The previous call to mlfs_new_data_blocks might have triggered
+		 * migration, which can change the extent tree structure. The path
+		 * must be refetched to avoid using stale data.
+		 */
+		mlfs_ext_drop_refs(path);
+		mlfs_free(path);
+		path = mlfs_find_extent(handle, inode, map->m_lblk, NULL, 0);
+		if (IS_ERR(path)) {
+			err = PTR_ERR(path);
+			mlfs_printf("mlfs_ext_get_blocks: mlfs_find_extent failed after block allocation for inum %u, lblk %lu, err %d\n",
+				    inode->inum, map->m_lblk, err);
+			/* We have allocated blocks but cannot insert them. This is a leak. */
+			mlfs_free_blocks(handle, inode, NULL, newblock, allocated,
+					get_default_free_blocks_flags(inode));
+			path = NULL;
+			goto out2;
+		}
+	}
 
 	/* try to insert new extent into found leaf and return */
 	newex.ee_block = cpu_to_le32(map->m_lblk);
