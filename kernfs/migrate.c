@@ -413,7 +413,8 @@ int migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, isolated_list
 	struct mlfs_map_blocks map;
 	offset_t cur_lblk;
 	uint32_t nr_blocks, nr_done = 0;
-	uint32_t migrated_success = 0;
+	uint32_t migrated_success = 0; // It includes directory entry blocks which are not migrated.
+	uint32_t migrated_data_entries = 0; // Migrated data entries.
 	uint8_t lower_dev, upper_dev;
 	struct list_head migrate_success_list;
 	handle_t handle = {.libfs = libfs_id, .dev = from_dev};
@@ -455,6 +456,19 @@ int migrate_blocks(uint8_t from_dev, uint8_t to_dev, int libfs_id, isolated_list
 		file_inode = icache_find(l->val.inum);
 		mlfs_assert(file_inode);
 
+		// Exclude directory entry blocks from migration.
+		if (file_inode->itype == T_DIR) {
+			// mlfs_printf("skip directory entry block: inum %d block_addr %lu(0x%lx)\n", 
+			// 		file_inode->inum, l->val.lblock, l->val.lblock);
+
+			list_del_init(&l->list);
+			// It was taken from from_lru->lru_head, so put it back to the list.
+			// Putting it to tail is better to avoid immediate re-migration.
+			list_add_tail(&l->list, &from_lru->lru_head);
+			migrated_success++;
+			continue;
+		}
+
 		/* mlfs_assert(l->key.offset % g_block_size_bytes == 0); */
 	
 		cur_lblk = l->val.lblock;
@@ -492,7 +506,7 @@ again:
 				cur_lblk << g_block_size_shift, 
 				cur_lblk << g_block_size_shift);
 
-		do_migrate_blocks(from_dev, to_dev, 
+		do_migrate_blocks(from_dev, to_dev, libfs_id,
 				l->val.inum, 
 				cur_lblk << g_block_size_shift, 
 				ret << g_block_size_shift, 
@@ -511,6 +525,7 @@ again:
 		
 		from_lru->n--;
 		migrated_success++;
+		migrated_data_entries++;
 	}
 
 	// Wait for finishing all outstanding IO.
@@ -581,11 +596,11 @@ again:
 
 	mlfs_info("Data migration (%d -> %d) is done (%u / %u): %u MB\n", 
 			from_dev, to_dev,
-			migrated_success, migrate_list->n,
-			(migrated_success * LRU_ENTRY_SIZE) >> 20);
+			migrated_data_entries, migrate_list->n,
+			(migrated_data_entries * LRU_ENTRY_SIZE) >> 20);
 
 	g_perf_stats.total_migrated_mb += 
-		((migrated_success * LRU_ENTRY_SIZE) >> 20);
+		((migrated_data_entries * LRU_ENTRY_SIZE) >> 20);
 
 	show_storage_stats();
 
