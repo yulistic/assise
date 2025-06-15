@@ -1725,11 +1725,11 @@ static void handle_digest_request(void *arg)
 
 	persist_dirty_objects_nvm(log_id);
 #ifdef USE_SSD
-	//persist_dirty_objects_ssd();
+	persist_dirty_objects_ssd();
 #endif
-//#ifdef USE_HDD
-//	persist_dirty_objects_hdd();
-//#endif	
+#ifdef USE_HDD
+	persist_dirty_objects_hdd();
+#endif	
 
 	if (enable_perf_stats)	
 		g_perf_stats.persist_time_tsc = 
