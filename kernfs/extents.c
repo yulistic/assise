@@ -137,10 +137,27 @@ int mlfs_ext_alloc_blocks(handle_t *handle, struct inode *inode,
 		a_type = DATA;
 
 retry:
+#ifdef KERNFS
+#ifdef RESERVED_META_BLOCKS
+	// For data blocks, check if we have enough free space excluding reserved blocks
+	if (a_type == DATA || a_type == DATA_LOG) {
+		// Check if allocation would consume reserved blocks
+		if (!can_allocate_data_blocks(handle->dev, *count)) {
+			uint64_t total_free = mlfs_count_free_blocks(get_inode_sb(handle->dev, inode));
+			printf("Data block allocation blocked to preserve reserved blocks (free: %lu, requested: %u)\n", 
+					total_free, *count);
+			ret = -ENOSPC;
+			goto handle_enospc;
+		}
+	}
+#endif
+#endif
+
 	ret = mlfs_new_blocks(get_inode_sb(handle->dev, inode), blockp, 
 			*count, 0, 0, a_type, goal);
 
 	if (ret > 0) {
+allocation_success:
 		//mlfs_assert(*blockp >= disk_sb[handle->dev].datablock_start);
 		*count = ret;
 		pthread_mutex_lock(&block_bitmap_mutex);    // Concurrent support.
@@ -149,15 +166,42 @@ retry:
 		pthread_mutex_unlock(&block_bitmap_mutex);  // Concurrent support.
 		get_inode_sb(handle->dev, inode)->used_blocks += *count;
 	} else if (ret == -ENOSPC) {
+handle_enospc:
 		retry_count++;
 
 		if (retry_count > 2)
 			panic("Fail to allocate block\n");
 
 #ifdef KERNFS
+#ifdef RESERVED_META_BLOCKS
+		// For meta block allocation, check if we can use reserved blocks
+		if (flags & MLFS_GET_BLOCKS_CREATE_META) {
+			// Check if reserved blocks are available for emergency allocation
+			if (check_reserved_blocks_available(handle->dev, *count)) {
+				printf("Using reserved blocks for meta allocation during space shortage\n");
+				// Force allocation using reserved blocks by setting special flag
+				ret = mlfs_new_blocks(get_inode_sb(handle->dev, inode), blockp, 
+						*count, 0, 0, a_type, goal);
+				if (ret > 0) {
+					// Successfully allocated using reserved space
+					goto allocation_success;
+				}
+			}
+			// If reserved blocks allocation also failed, just return error
+			// This prevents infinite recursion during migration
+			printf("Meta block allocation failed, no reserved blocks available\n");
+			return -ENOSPC;
+		} else {
+			// For data blocks, try migration
 			try_migrate_blocks(g_root_dev, g_ssd_dev, handle->libfs, 0, 0, 1);
 			if (migrated)
 				*migrated = true;
+		}
+#else
+			try_migrate_blocks(g_root_dev, g_ssd_dev, handle->libfs, 0, 0, 1);
+			if (migrated)
+				*migrated = true;
+#endif
 #endif
 
 		goto retry;

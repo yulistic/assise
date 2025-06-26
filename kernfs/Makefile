@@ -61,6 +61,7 @@ MLFS_FLAGS += -DUSE_SSD
 #MLFS_FLAGS += -DUSE_HDD
 MLFS_FLAGS += -DMIGRATION
 #MLFS_FLAGS += -DEXPERIMENTAL
+# MLFS_FLAGS += -DRESERVED_META_BLOCKS # For testing: reserve meta blocks to prevent infinite recursion in migration.
 
 #DEBUG = -g -O0
 #DEBUG = -g3 -Ofast

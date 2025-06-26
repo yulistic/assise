@@ -2127,6 +2127,11 @@ void init_fs(void)
 	balloc_init(g_hdd_dev, sb[g_hdd_dev], 0);
 #endif
 
+#ifdef RESERVED_META_BLOCKS
+	// Initialize reserved blocks system to prevent infinite recursion
+	init_reserved_blocks_for_all_devices();
+#endif
+
 	// read superblock for log if it's on a separate device
 	if(g_log_dev != g_root_dev)
 		read_superblock(g_log_dev);
