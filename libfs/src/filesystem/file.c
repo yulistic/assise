@@ -382,7 +382,7 @@ int mlfs_file_fallocate(struct file *f, offset_t offset, size_t len)
 		for (size_t i = 0; i < len; i += ALLOC_IO_SIZE) {
 			size_t io_size = _min(len - i, ALLOC_IO_SIZE);
 
-			int ret = mlfs_file_write(f, (uint8_t *)falloc_buf, offset, io_size);
+			int ret = mlfs_file_write(f, (uint8_t *)falloc_buf, io_size, offset);
 			// keep accumulating offset, here should hold `ret == io_size'
 			offset += ret;
 			if (ret < 0) {
