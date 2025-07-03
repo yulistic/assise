@@ -31,3 +31,9 @@ libfs/bin/*
 libfs/lib/dpdk-16.07/*
 libfs/lib/nvml/*
 #libfs/lib/spdk/*
+
+#bench/micro
+bench/micro/create_files
+bench/micro/iobench
+bench/micro/iobench_lat
+bench/micro/results
