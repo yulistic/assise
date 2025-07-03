@@ -1,6 +1,7 @@
 CC = gcc -std=c99
 #CC = c99
-EXE = create_files iobench iobench_lat dmabench dmabench_lat
+# EXE = create_files iobench iobench_lat dmabench dmabench_lat
+EXE = create_files iobench iobench_lat
 #$(info $(EXE))
 
 CUR_DIR = $(shell pwd)
