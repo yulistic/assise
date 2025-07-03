@@ -325,6 +325,8 @@ void io_bench::do_write(void)
 	int bytes_written;
 	unsigned long random_range;
 	uint32_t count = 0;
+	uint32_t progress_interval = ops_cap / 20; // Report progress every 5%
+	if (progress_interval == 0) progress_interval = 1;
 
 	random_range = file_size_bytes / io_size;
 
@@ -336,11 +338,23 @@ void io_bench::do_write(void)
 	}
 
 	//cout << "# of ops: " << ops_cap << endl;
+	if (id == 0) { // Only thread 0 reports progress
+		printf("Starting %s benchmark with %lu operations...\n", 
+			get_test_str(test_type).c_str(), ops_cap);
+	}
 
 	if (test_type == SEQ_WRITE || test_type == SEQ_WRITE_READ) {
 		unsigned int _io_size = io_size;
 		for (unsigned long i = 0; i < file_size_bytes; i += io_size) {
 			count++;
+			
+			// Progress reporting
+			if (id == 0 && count % progress_interval == 0) {
+				float progress = (float)count / ops_cap * 100.0;
+				printf("Thread %d: %.1f%% complete (%u/%lu operations)\n", 
+					id, progress, count, ops_cap);
+			}
+			
 			if (i + io_size > file_size_bytes)
 				_io_size = file_size_bytes - i;
 			else
@@ -370,6 +384,14 @@ void io_bench::do_write(void)
 		unsigned int _io_size = io_size;
 		for (auto it : io_list) {
 			count++;
+			
+			// Progress reporting
+			if (id == 0 && count % progress_interval == 0) {
+				float progress = (float)count / ops_cap * 100.0;
+				printf("Thread %d: %.1f%% complete (%u/%lu operations)\n", 
+					id, progress, count, ops_cap);
+			}
+			
 			/*
 			if (it + io_size > file_size_bytes) {
 				_io_size = file_size_bytes - it;
@@ -394,6 +416,14 @@ void io_bench::do_write(void)
         std::list<uint8_t>::iterator op_it = op_list.begin();
 		for (auto it : io_list) {
 			count++;
+			
+			// Progress reporting
+			if (id == 0 && count % progress_interval == 0) {
+				float progress = (float)count / ops_cap * 100.0;
+				printf("Thread %d: %.1f%% complete (%u/%lu operations)\n", 
+					id, progress, count, ops_cap);
+			}
+			
 			lseek(fd, it, SEEK_SET);
 
             //read
@@ -419,6 +449,10 @@ void io_bench::do_write(void)
 		printf("do_sync\n");
 		fsync(fd);
 	}
+	
+	if (id == 0) {
+		printf("Thread %d: Write operations completed (100.0%%)\n", id);
+	}
 
 	if (per_thread_stats) {
 		time_stats_stop(&stats);
@@ -436,6 +470,8 @@ void io_bench::do_read(void)
 {
 	int ret;
 	uint32_t count = 0;
+	uint32_t progress_interval = ops_cap / 20; // Report progress every 5%
+	if (progress_interval == 0) progress_interval = 1;
 
         pthread_barrier_wait(&tsync);
 
@@ -445,10 +481,22 @@ void io_bench::do_read(void)
 	}
 
 	//cout << "# of ops: " << ops_cap << endl;
+	if (id == 0) { // Only thread 0 reports progress
+		printf("Starting %s benchmark with %lu operations...\n", 
+			get_test_str(test_type).c_str(), ops_cap);
+	}
 
 	if (test_type == SEQ_READ || test_type == SEQ_WRITE_READ) {
 		for (unsigned long i = 0; i < file_size_bytes ; i += io_size) {
 			count++;
+			
+			// Progress reporting
+			if (id == 0 && count % progress_interval == 0) {
+				float progress = (float)count / ops_cap * 100.0;
+				printf("Thread %d: %.1f%% complete (%u/%lu operations)\n", 
+					id, progress, count, ops_cap);
+			}
+			
 			if (i + io_size > file_size_bytes)
 				io_size = file_size_bytes - i;
 			else
@@ -482,6 +530,14 @@ void io_bench::do_read(void)
 	} else if (test_type == RAND_READ || test_type == ZIPF_READ) {
 		for (auto it : io_list) {
 			count++;
+			
+			// Progress reporting
+			if (id == 0 && count % progress_interval == 0) {
+				float progress = (float)count / ops_cap * 100.0;
+				printf("Thread %d: %.1f%% complete (%u/%lu operations)\n", 
+					id, progress, count, ops_cap);
+			}
+			
 		/*
 			if (it + io_size > file_size_bytes)
 				io_size = file_size_bytes - it;
@@ -493,6 +549,10 @@ void io_bench::do_read(void)
 			if(count >= ops_cap)
 				break;
 		}
+	}
+
+	if (id == 0) {
+		printf("Thread %d: Read operations completed (100.0%%)\n", id);
 	}
 
 #if 0
