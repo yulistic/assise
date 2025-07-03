@@ -1468,7 +1468,11 @@ int do_unaligned_read(struct inode *ip, struct mlfs_reply *reply, offset_t off, 
 
 		_fcache_block = add_to_read_cache(ip, off_aligned, NULL);
 
-#if 1
+#if 0
+		/* NOTE: Readahead is disabled because it doesn't work well.
+		 * Enabling readahead reduces the read performance by 10x.
+		 */
+
 		// TODO: Move block-level readahead to read cache
 		if (bh->b_dev == g_ssd_dev)
 			mlfs_readahead(g_ssd_dev, bh->b_blocknr, (128 << 10));
@@ -1858,7 +1862,11 @@ do_global_search:
 #endif
 		offset_t cur, l;
 
-#if 1
+#if 0
+		/* NOTE: Readahead is disabled because it doesn't work well.
+		 * Enabling readahead reduces the read performance by 10x.
+		 */
+
 		// TODO: block-level read_ahead to read cache.
 		if (bmap_req.dev == g_ssd_dev)
 			mlfs_readahead(g_ssd_dev, bmap_req.block_no, (256 << 10));
