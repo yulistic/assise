@@ -19,6 +19,11 @@ pthread_spinlock_t lru_spinlock;
 int wb_threshold[g_n_devices + 1] = {0, 60, 80, 100};
 int migrate_threshold[g_n_devices + 1] = {0, 90, 95, 100};
 
+// Reserved blocks management
+static uint32_t g_reserved_meta_blocks[g_n_devices + 1] = {0};
+static uint32_t g_reserved_blocks_used[g_n_devices + 1] = {0};
+static pthread_mutex_t g_reserved_blocks_mutex[g_n_devices + 1];
+
 static inline uint8_t get_lower_dev(uint8_t dev)
 {
 	uint8_t lower_dev;
@@ -775,4 +780,92 @@ do_force_migration:
 
 	return 0;
 #endif // MIGRATION
+}
+
+
+
+// Initialize reserved blocks system
+static void init_reserved_blocks_system(uint8_t dev)
+{
+	uint32_t total_blocks = disk_sb[dev].ndatablocks;
+	uint32_t reserved_count = (total_blocks * RESERVED_META_BLOCKS_PERCENT) / 100;
+	
+	// Ensure minimum reserved blocks
+	if (reserved_count < MIN_RESERVED_META_BLOCKS)
+		reserved_count = MIN_RESERVED_META_BLOCKS;
+	
+	g_reserved_meta_blocks[dev] = reserved_count;
+	g_reserved_blocks_used[dev] = 0;
+	
+	pthread_mutex_init(&g_reserved_blocks_mutex[dev], NULL);
+	
+	mlfs_info("Reserved %u blocks (%u%%) for meta operations on dev %u\n", 
+			reserved_count, (reserved_count * 100) / total_blocks, dev);
+}
+
+// Public function to initialize reserved blocks for all devices
+void init_reserved_blocks_for_all_devices(void)
+{
+	init_reserved_blocks_system(g_root_dev);
+#ifdef USE_SSD
+	init_reserved_blocks_system(g_ssd_dev);
+#endif
+#ifdef USE_HDD
+	init_reserved_blocks_system(g_hdd_dev);
+#endif
+}
+
+// Check if reserved blocks are available for emergency meta allocation
+int check_reserved_blocks_available(uint8_t dev, int required_blocks)
+{
+	int available;
+	
+	pthread_mutex_lock(&g_reserved_blocks_mutex[dev]);
+	available = (g_reserved_blocks_used[dev] + required_blocks) <= g_reserved_meta_blocks[dev];
+	pthread_mutex_unlock(&g_reserved_blocks_mutex[dev]);
+	
+	return available;
+}
+
+// Check if data allocation can proceed without consuming reserved blocks
+int can_allocate_data_blocks(uint8_t dev, int required_blocks)
+{
+	int can_allocate;
+	uint64_t total_free = mlfs_count_free_blocks(sb[dev]);
+	
+	pthread_mutex_lock(&g_reserved_blocks_mutex[dev]);
+	// Ensure we don't consume reserved blocks for data allocation
+	can_allocate = (total_free > g_reserved_meta_blocks[dev] + required_blocks);
+	pthread_mutex_unlock(&g_reserved_blocks_mutex[dev]);
+	
+	return can_allocate;
+}
+
+// Reserve blocks for meta operation
+static int reserve_meta_blocks(uint8_t dev, int count)
+{
+	int ret = 0;
+	
+	pthread_mutex_lock(&g_reserved_blocks_mutex[dev]);
+	if (g_reserved_blocks_used[dev] + count <= g_reserved_meta_blocks[dev]) {
+		g_reserved_blocks_used[dev] += count;
+		ret = 1;
+		mlfs_debug("Reserved %d meta blocks on dev %u (used: %u/%u)\n", 
+				count, dev, g_reserved_blocks_used[dev], g_reserved_meta_blocks[dev]);
+	}
+	pthread_mutex_unlock(&g_reserved_blocks_mutex[dev]);
+	
+	return ret;
+}
+
+// Release reserved blocks
+static void release_meta_blocks(uint8_t dev, int count)
+{
+	pthread_mutex_lock(&g_reserved_blocks_mutex[dev]);
+	if (g_reserved_blocks_used[dev] >= count) {
+		g_reserved_blocks_used[dev] -= count;
+		mlfs_debug("Released %d meta blocks on dev %u (used: %u/%u)\n", 
+				count, dev, g_reserved_blocks_used[dev], g_reserved_meta_blocks[dev]);
+	}
+	pthread_mutex_unlock(&g_reserved_blocks_mutex[dev]);
 }
